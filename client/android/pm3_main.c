@@ -120,8 +120,12 @@ jboolean isExecuting(JNIEnv *env, jobject instance) {
  * 进行设备链接验证!
  * */
 jboolean testPm3(JNIEnv *env, jobject instance) {
+    LOGD("打开串口中!");
     bool ret1 = open();
+    LOGD("串口打开成功!");
+    LOGD("测试PM3中");
     bool ret2 = TestProxmark() == PM3_SUCCESS;
+    LOGD("测试PM3成功");
     return (jboolean) (ret1 && ret2);
 }
 
