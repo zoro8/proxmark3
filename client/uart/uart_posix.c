@@ -48,6 +48,9 @@
 #include <fcntl.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
+#include <jni_tools.h>
+#include "sys/socket.h"
+#include "sys/un.h"
 
 #include "comms.h"
 
@@ -65,8 +68,8 @@ typedef struct {
 
 // see pm3_cmd.h
 struct timeval timeout = {
-    .tv_sec  = 0, // 0 second
-    .tv_usec = UART_FPC_CLIENT_RX_TIMEOUT_MS * 1000
+        .tv_sec  = 0, // 0 second
+        .tv_usec = UART_FPC_CLIENT_RX_TIMEOUT_MS * 1000
 };
 
 uint32_t newtimeout_value = 0;
@@ -156,6 +159,36 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
         return sp;
     }
 
+    if (memcmp(pcPortName, "socket:", 7) == 0) {
+        LOGD("进入本地套接字！");
+        size_t servernameLen = strlen(pcPortName);
+        char *serverNameBuf = malloc(servernameLen - 7);
+        for (int i = 8, j = 0; i < servernameLen; ++i, ++j) {
+            serverNameBuf[j] = pcPortName[i];
+        }
+
+        int localsocket, len;
+        struct sockaddr_un remote;
+
+        if ((localsocket = socket(AF_LOCAL, SOCK_STREAM, 0)) == -1) {
+            exit(1);
+        }
+
+        char *name = "CN.DXL.ComBridgeAdapter.2020_0413";//与java上层相同哦
+
+        remote.sun_path[0] = '\0';  /* abstract namespace */
+        strcpy(remote.sun_path + 1, name);
+        remote.sun_family = AF_LOCAL;
+        int nameLen = strlen(name);
+        len = 1 + nameLen + offsetof(struct sockaddr_un, sun_path);
+
+        if (connect(localsocket, (struct sockaddr *) &remote, len) == -1) {
+            LOGD("连接失败!");
+            return INVALID_SERIAL_PORT;
+        }
+
+    }
+
     sp->fd = open(pcPortName, O_RDWR | O_NOCTTY | O_NDELAY | O_NONBLOCK);
     if (sp->fd == -1) {
         uart_close(sp);
@@ -165,11 +198,11 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
     // Finally figured out a way to claim a serial port interface under unix
     // We just try to set a (advisory) lock on the file descriptor
     struct flock fl;
-    fl.l_type   = F_WRLCK;
+    fl.l_type = F_WRLCK;
     fl.l_whence = SEEK_SET;
-    fl.l_start  = 0;
-    fl.l_len    = 0;
-    fl.l_pid    = getpid();
+    fl.l_start = 0;
+    fl.l_len = 0;
+    fl.l_pid = getpid();
 
     // Does the system allows us to place a lock on this file descriptor
     if (fcntl(sp->fd, F_SETLK, &fl) == -1) {
@@ -221,15 +254,15 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
 }
 
 void uart_close(const serial_port sp) {
-    serial_port_unix *spu = (serial_port_unix *)sp;
+    serial_port_unix *spu = (serial_port_unix *) sp;
     tcflush(spu->fd, TCIOFLUSH);
     tcsetattr(spu->fd, TCSANOW, &(spu->tiOld));
     struct flock fl;
-    fl.l_type   = F_UNLCK;
+    fl.l_type = F_UNLCK;
     fl.l_whence = SEEK_SET;
-    fl.l_start  = 0;
-    fl.l_len    = 0;
-    fl.l_pid    = getpid();
+    fl.l_start = 0;
+    fl.l_len = 0;
+    fl.l_pid = getpid();
 
     // Does the system allows us to place a lock on this file descriptor
     int err = fcntl(spu->fd, F_SETLK, &fl);
@@ -255,9 +288,9 @@ int uart_receive(const serial_port sp, uint8_t *pbtRx, uint32_t pszMaxRxLen, uin
     do {
         // Reset file descriptor
         FD_ZERO(&rfds);
-        FD_SET(((serial_port_unix *)sp)->fd, &rfds);
+        FD_SET(((serial_port_unix *) sp)->fd, &rfds);
         tv = timeout;
-        int res = select(((serial_port_unix *)sp)->fd + 1, &rfds, NULL, NULL, &tv);
+        int res = select(((serial_port_unix *) sp)->fd + 1, &rfds, NULL, NULL, &tv);
 
         // Read error
         if (res < 0) {
@@ -276,7 +309,7 @@ int uart_receive(const serial_port sp, uint8_t *pbtRx, uint32_t pszMaxRxLen, uin
         }
 
         // Retrieve the count of the incoming bytes
-        res = ioctl(((serial_port_unix *)sp)->fd, FIONREAD, &byteCount);
+        res = ioctl(((serial_port_unix *) sp)->fd, FIONREAD, &byteCount);
 //        printf("UART:: RX ioctl res %d byteCount %u\n", res, byteCount);
         if (res < 0) return PM3_ENOTTY;
 
@@ -287,7 +320,7 @@ int uart_receive(const serial_port sp, uint8_t *pbtRx, uint32_t pszMaxRxLen, uin
         }
 
         // There is something available, read the data
-        res = read(((serial_port_unix *)sp)->fd, pbtRx + (*pszRxLen), byteCount);
+        res = read(((serial_port_unix *) sp)->fd, pbtRx + (*pszRxLen), byteCount);
 
         // Stop if the OS has some troubles reading the data
         if (res <= 0) {
@@ -313,9 +346,9 @@ int uart_send(const serial_port sp, const uint8_t *pbtTx, const uint32_t len) {
     while (pos < len) {
         // Reset file descriptor
         FD_ZERO(&rfds);
-        FD_SET(((serial_port_unix *)sp)->fd, &rfds);
+        FD_SET(((serial_port_unix *) sp)->fd, &rfds);
         tv = timeout;
-        int res = select(((serial_port_unix *)sp)->fd + 1, NULL, &rfds, NULL, &tv);
+        int res = select(((serial_port_unix *) sp)->fd + 1, NULL, &rfds, NULL, &tv);
 
         // Write error
         if (res < 0) {
@@ -330,7 +363,7 @@ int uart_send(const serial_port sp, const uint8_t *pbtTx, const uint32_t len) {
         }
 
         // Send away the bytes
-        res = write(((serial_port_unix *)sp)->fd, pbtTx + pos, len - pos);
+        res = write(((serial_port_unix *) sp)->fd, pbtTx + pos, len - pos);
 
         // Stop if the OS has some troubles sending the data
         if (res <= 0)
@@ -342,7 +375,7 @@ int uart_send(const serial_port sp, const uint8_t *pbtTx, const uint32_t len) {
 }
 
 bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
-    const serial_port_unix *spu = (serial_port_unix *)sp;
+    const serial_port_unix *spu = (serial_port_unix *) sp;
     speed_t stPortSpeed;
     switch (uiPortSpeed) {
         case 0:
@@ -441,7 +474,7 @@ bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
 uint32_t uart_get_speed(const serial_port sp) {
     struct termios ti;
     uint32_t uiPortSpeed;
-    const serial_port_unix *spu = (serial_port_unix *)sp;
+    const serial_port_unix *spu = (serial_port_unix *) sp;
 
     if (tcgetattr(spu->fd, &ti) == -1)
         return 0;
@@ -524,4 +557,5 @@ uint32_t uart_get_speed(const serial_port sp) {
     };
     return uiPortSpeed;
 }
+
 #endif

@@ -21,18 +21,28 @@
 #include <stdio.h> // for Mingw readline
 #include <stdarg.h>
 #include <stdlib.h>
+
+#ifndef ANDROID
+// We are run pm3 is a so, not the exe!
+// So some lib is cant work. :(
 #include <readline/readline.h>
+
+#endif
+
 #include <complex.h>
 #include "util.h"
 #include "proxmark3.h"  // PROXLOG
 #include "fileutils.h"
 #include "pm3_cmd.h"
+
 #ifdef _WIN32
 # include <direct.h>    // _mkdir
 #endif
+
 #include <time.h>
 #include "emojis.h"
 #include "emojis_alt.h"
+
 session_arg_t session;
 
 double CursorScaleFactor = 1;
@@ -94,7 +104,8 @@ int searchHomeFilePath(char **foundpath, const char *filename, bool create_home)
         *foundpath = path;
         return PM3_SUCCESS;
     }
-    path = realloc(path, (strlen(user_path) + strlen(PM3_USER_DIRECTORY) + strlen(filename) + 1) * sizeof(char));
+    path = realloc(path, (strlen(user_path) + strlen(PM3_USER_DIRECTORY) + strlen(filename) + 1) *
+                         sizeof(char));
     strcat(path, filename);
     *foundpath = path;
     return PM3_SUCCESS;
@@ -105,7 +116,7 @@ void PrintAndLogOptions(const char *str[][2], size_t size, size_t space) {
     char format[2000] = "";
     size_t counts[2] = {0, 0};
     for (size_t i = 0; i < size; i++)
-        for (size_t j = 0 ; j < 2 ; j++)
+        for (size_t j = 0; j < 2; j++)
             if (counts[j] < strlen(str[i][j])) {
                 counts[j] = strlen(str[i][j]);
             }
@@ -130,7 +141,7 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
     // skip debug messages if client debugging is turned off i.e. 'DATA SETDEBUG 0'
     if (g_debugMode == 0 && level == DEBUG)
         return;
-    
+
     // skip HINT messages if client has hints turned off i.e. 'HINT 0'
     if (session.show_hints == false && level == HINT)
         return;
@@ -142,19 +153,23 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
     char *tmp_ptr = NULL;
     FILE *stream = stdout;
     const char *spinner[] = {_YELLOW_("[\\]"), _YELLOW_("[|]"), _YELLOW_("[/]"), _YELLOW_("[-]")};
-    const char *spinner_emoji[] = {" :clock1: ", " :clock2: ", " :clock3: ", " :clock4: ", " :clock5: ", " :clock6: ",
-                                   " :clock7: ", " :clock8: ", " :clock9: ", " :clock10: ", " :clock11: ", " :clock12: "};
+    const char *spinner_emoji[] = {" :clock1: ", " :clock2: ", " :clock3: ", " :clock4: ",
+                                   " :clock5: ", " :clock6: ",
+                                   " :clock7: ", " :clock8: ", " :clock9: ", " :clock10: ",
+                                   " :clock11: ", " :clock12: "};
     switch (level) {
         case ERR:
             if (session.emoji_mode == EMOJI)
-                strncpy(prefix,  _RED_("[!!]") " :rotating_light: ", sizeof(prefix) - 1);
+                strncpy(prefix, _RED_("[!!]")
+                                " :rotating_light: ", sizeof(prefix) - 1);
             else
                 strncpy(prefix, _RED_("[!!]"), sizeof(prefix) - 1);
             stream = stderr;
             break;
         case FAILED:
             if (session.emoji_mode == EMOJI)
-                strncpy(prefix, _RED_("[-]") " :no_entry: ", sizeof(prefix) - 1);
+                strncpy(prefix, _RED_("[-]")
+                                " :no_entry: ", sizeof(prefix) - 1);
             else
                 strncpy(prefix, _RED_("[-]"), sizeof(prefix) - 1);
             break;
@@ -167,7 +182,8 @@ void PrintAndLogEx(logLevel_t level, const char *fmt, ...) {
             break;
         case WARNING:
             if (session.emoji_mode == EMOJI)
-                strncpy(prefix, _CYAN_("[!]") " :warning:  ", sizeof(prefix) - 1);
+                strncpy(prefix, _CYAN_("[!]")
+                                " :warning:  ", sizeof(prefix) - 1);
             else
                 strncpy(prefix, _CYAN_("[!]"), sizeof(prefix) - 1);
             break;
@@ -271,7 +287,10 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
             } else {
 
                 if (session.supports_colors) {
-                    printf(_YELLOW_("[=]") "Session log " _YELLOW_("%s") "\n", my_logfile_path);
+                    printf(_YELLOW_("[=]")
+                           "Session log "
+                           _YELLOW_("%s")
+                           "\n", my_logfile_path);
                 } else {
                     printf("[=] Session log %s\n", my_logfile_path);
                 }
@@ -286,16 +305,16 @@ static void fPrintAndLog(FILE *stream, const char *fmt, ...) {
 // the background (while the prompt is displayed and accepting user input),
 // stash the prompt and bring it back later.
 #ifdef RL_STATE_READCMD
-    // We are using GNU readline. libedit (OSX) doesn't support this flag.
-    int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
+        // We are using GNU readline. libedit (OSX) doesn't support this flag.
+        int need_hack = (rl_readline_state & RL_STATE_READCMD) > 0;
 
-    if (need_hack) {
-        saved_point = rl_point;
-        saved_line = rl_copy_text(0, rl_end);
-        rl_save_prompt();
-        rl_replace_line("", 0);
-        rl_redisplay();
-    }
+        if (need_hack) {
+            saved_point = rl_point;
+            saved_line = rl_copy_text(0, rl_end);
+            rl_save_prompt();
+            rl_replace_line("", 0);
+            rl_redisplay();
+        }
 #endif
 
     va_start(argptr, fmt);
@@ -347,24 +366,26 @@ void SetFlushAfterWrite(bool value) {
 void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
     if (filter) {
         // Filter out ANSI sequences on these OS
-        uint8_t *rdest = (uint8_t *)dest;
-        uint8_t *rsrc = (uint8_t *)src;
+        uint8_t *rdest = (uint8_t *) dest;
+        uint8_t *rsrc = (uint8_t *) src;
         uint16_t si = 0;
         for (uint16_t i = 0; i < n; i++) {
             if ((i < n - 1)
-                    && (rsrc[i] == '\x1b')
-                    && (rsrc[i + 1] >= 0x40)
-                    && (rsrc[i + 1] <= 0x5F)) {  // entering ANSI sequence
+                && (rsrc[i] == '\x1b')
+                && (rsrc[i + 1] >= 0x40)
+                && (rsrc[i + 1] <= 0x5F)) {  // entering ANSI sequence
 
                 i++;
                 if ((i < n - 1) && (rsrc[i] == '[')) { // entering CSI sequence
                     i++;
 
-                    while ((i < n - 1) && (rsrc[i] >= 0x30) && (rsrc[i] <= 0x3F)) { // parameter bytes
+                    while ((i < n - 1) && (rsrc[i] >= 0x30) &&
+                           (rsrc[i] <= 0x3F)) { // parameter bytes
                         i++;
                     }
 
-                    while ((i < n - 1) && (rsrc[i] >= 0x20) && (rsrc[i] <= 0x2F)) { // intermediate bytes
+                    while ((i < n - 1) && (rsrc[i] >= 0x20) &&
+                           (rsrc[i] <= 0x2F)) { // intermediate bytes
                         i++;
                     }
 
@@ -382,10 +403,12 @@ void memcpy_filter_ansi(void *dest, const void *src, size_t n, bool filter) {
     }
 }
 
-static bool emojify_token(const char *token, uint8_t token_length, const char **emojified_token, uint8_t *emojified_token_length, emojiMode_t mode) {
+static bool emojify_token(const char *token, uint8_t token_length, const char **emojified_token,
+                          uint8_t *emojified_token_length, emojiMode_t mode) {
     int i = 0;
     while (EmojiTable[i].alias && EmojiTable[i].emoji) {
-        if ((strlen(EmojiTable[i].alias) == token_length) && (0 == memcmp(EmojiTable[i].alias, token, token_length))) {
+        if ((strlen(EmojiTable[i].alias) == token_length) &&
+            (0 == memcmp(EmojiTable[i].alias, token, token_length))) {
             switch (mode) {
                 case EMOJI: {
                     *emojified_token = EmojiTable[i].emoji;
@@ -396,7 +419,8 @@ static bool emojify_token(const char *token, uint8_t token_length, const char **
                     int j = 0;
                     *emojified_token_length = 0;
                     while (EmojiAltTable[j].alias && EmojiAltTable[i].alttext) {
-                        if ((strlen(EmojiAltTable[j].alias) == token_length) && (0 == memcmp(EmojiAltTable[j].alias, token, token_length))) {
+                        if ((strlen(EmojiAltTable[j].alias) == token_length) &&
+                            (0 == memcmp(EmojiAltTable[j].alias, token, token_length))) {
                             *emojified_token = EmojiAltTable[j].alttext;
                             *emojified_token_length = strlen(EmojiAltTable[j].alttext);
                             break;
@@ -433,10 +457,10 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
         const char *emojified_token = NULL;
         uint8_t emojified_token_length = 0;
         char *current_token = NULL;
-        uint8_t current_token_length=0;
+        uint8_t current_token_length = 0;
         char current_char;
-        char *rdest = (char *)dest;
-        char *rsrc = (char *)src;
+        char *rdest = (char *) dest;
+        char *rsrc = (char *) src;
         uint16_t si = 0;
         for (uint16_t i = 0; i < n; i++) {
             current_char = rsrc[i];
@@ -453,7 +477,8 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
                 // finishing the current token.
                 if (current_char == ':') {
                     // nothing changed? we still need the ending ':' as it might serve for an upcoming emoji
-                    if (! emojify_token(current_token, current_token_length + 1, &emojified_token, &emojified_token_length, mode)) {
+                    if (!emojify_token(current_token, current_token_length + 1, &emojified_token,
+                                       &emojified_token_length, mode)) {
                         memcpy(rdest + si, current_token, current_token_length);
                         si += current_token_length;
                         current_token = rsrc + i;
@@ -478,6 +503,8 @@ void memcpy_filter_emoji(void *dest, const void *src, size_t n, emojiMode_t mode
     }
 }
 
+#ifndef ANDROID
+
 void iceIIR_Butterworth(int *data, const size_t len) {
 
     int *output = (int *) calloc(sizeof(int) * len, sizeof(uint8_t));
@@ -490,15 +517,18 @@ void iceIIR_Butterworth(int *data, const size_t len) {
     float fc = 0.1125f;          // center frequency
 
     // create very simple low-pass filter to remove images (2nd-order Butterworth)
-    float complex iir_buf[3] = {0, 0, 0};
-    float b[3] = {0.003621681514929,  0.007243363029857, 0.003621681514929};
+    float complex
+            iir_buf[3] = {0, 0, 0};
+    float b[3] = {0.003621681514929, 0.007243363029857, 0.003621681514929};
     float a[3] = {1.000000000000000, -1.822694925196308, 0.837181651256023};
 
     for (size_t i = 0; i < adjustedLen; ++i) {
 
         float sample = data[i];          // input sample read from array
-        float complex x_prime  = 1.0f;   // save sample for estimating frequency
-        float complex x;
+        float complex
+                x_prime = 1.0f;   // save sample for estimating frequency
+        float complex
+                x;
 
         // remove DC offset and mix to complex baseband
         x = (sample - 127.5f) * cexpf(_Complex_I * 2 * M_PI * fc * i);
@@ -507,9 +537,9 @@ void iceIIR_Butterworth(int *data, const size_t len) {
         iir_buf[2] = iir_buf[1];
         iir_buf[1] = iir_buf[0];
         iir_buf[0] = x - a[1] * iir_buf[1] - a[2] * iir_buf[2];
-        x          = b[0] * iir_buf[0] +
-                     b[1] * iir_buf[1] +
-                     b[2] * iir_buf[2];
+        x = b[0] * iir_buf[0] +
+            b[1] * iir_buf[1] +
+            b[2] * iir_buf[2];
 
         // compute instantaneous frequency by looking at phase difference
         // between adjacent samples
@@ -526,6 +556,8 @@ void iceIIR_Butterworth(int *data, const size_t len) {
 
     free(output);
 }
+
+#endif
 
 void iceSimple_Filter(int *data, const size_t len, uint8_t k) {
 // ref: http://www.edn.com/design/systems-design/4320010/A-simple-software-lowpass-filter-suits-embedded-system-applications

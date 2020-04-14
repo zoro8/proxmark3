@@ -33,9 +33,11 @@
 #include <string.h>
 
 #if defined(__unix__) || defined(__APPLE__)
+
 #  include <unistd.h>
+
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(ANDROID)
 typedef int RetType;
 typedef int LenType;
 #elif __GLIBC__
@@ -54,7 +56,7 @@ struct Buffer {
 };
 
 static RetType write_to_buffer(void *cookie, const char *data, LenType len) {
-    struct Buffer *b = (struct Buffer *)cookie;
+    struct Buffer *b = (struct Buffer *) cookie;
     char *ptr = *b->ptr;
     size_t newsize;
 
@@ -62,7 +64,8 @@ static RetType write_to_buffer(void *cookie, const char *data, LenType len) {
     if (unlikely(add_check_overflow(*b->len, len, &newsize)))
         return -1;
 
-    if (newsize >= b->alloc) { // NB! one extra byte is needed to avoid buffer overflow at close_buffer
+    if (newsize >=
+        b->alloc) { // NB! one extra byte is needed to avoid buffer overflow at close_buffer
         // make room
         size_t newalloc = newsize + newsize / 2 + 1;    // give 50% more room
 
@@ -84,7 +87,7 @@ static RetType write_to_buffer(void *cookie, const char *data, LenType len) {
 }
 
 static int close_buffer(void *cookie) {
-    struct Buffer *b = (struct Buffer *)cookie;
+    struct Buffer *b = (struct Buffer *) cookie;
     if (*b->ptr)
         (*b->ptr)[*b->len] = '\0';
     free(b);
@@ -92,7 +95,7 @@ static int close_buffer(void *cookie) {
 }
 
 FILE *open_memstream(char **bufptr, size_t *lenptr) {
-    struct Buffer *b = (struct Buffer *)calloc(sizeof(struct Buffer), sizeof(uint8_t));
+    struct Buffer *b = (struct Buffer *) calloc(sizeof(struct Buffer), sizeof(uint8_t));
     if (b == NULL)
         return NULL;
     b->alloc = 0;
@@ -101,7 +104,7 @@ FILE *open_memstream(char **bufptr, size_t *lenptr) {
     *bufptr = NULL;
     *lenptr = 0;
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(ANDROID)
     return funopen(b, NULL, write_to_buffer, NULL, close_buffer);
 #elif __GLIBC__
     static const cookie_io_functions_t vtable = {
