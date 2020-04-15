@@ -161,32 +161,36 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
 
     if (memcmp(pcPortName, "socket:", 7) == 0) {
         LOGD("进入本地套接字！");
-        size_t servernameLen = strlen(pcPortName);
-        char *serverNameBuf = malloc(servernameLen - 7);
-        for (int i = 8, j = 0; i < servernameLen; ++i, ++j) {
+        size_t servernameLen = strlen(pcPortName) - 7;
+        char *serverNameBuf = malloc(servernameLen);
+        memset(serverNameBuf, '\0', servernameLen);
+        for (int i = 7, j = 0; j < servernameLen; ++i, ++j) {
             serverNameBuf[j] = pcPortName[i];
         }
+        LOGD("命名空间: %s", serverNameBuf);
 
         int localsocket, len;
         struct sockaddr_un remote;
 
-        if ((localsocket = socket(AF_LOCAL, SOCK_STREAM, 0)) == -1) {
-            exit(1);
-        }
-
-        char *name = "CN.DXL.ComBridgeAdapter.2020_0413";//与java上层相同哦
-
         remote.sun_path[0] = '\0';  /* abstract namespace */
-        strcpy(remote.sun_path + 1, name);
+        strcpy(remote.sun_path + 1, serverNameBuf);
         remote.sun_family = AF_LOCAL;
-        int nameLen = strlen(name);
+        int nameLen = strlen(serverNameBuf);
+        free(serverNameBuf);
         len = 1 + nameLen + offsetof(struct sockaddr_un, sun_path);
+
+        if ((localsocket = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
+            return INVALID_SERIAL_PORT;
+        }
 
         if (connect(localsocket, (struct sockaddr *) &remote, len) == -1) {
             LOGD("连接失败!");
             return INVALID_SERIAL_PORT;
         }
 
+        sp->fd = localsocket;
+
+        return sp;
     }
 
     sp->fd = open(pcPortName, O_RDWR | O_NOCTTY | O_NDELAY | O_NONBLOCK);
