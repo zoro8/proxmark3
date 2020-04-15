@@ -27,7 +27,7 @@
 #include "fileutils.h"
 #include "jni_tools.h"
 
-#define LOCAL_SOCKET_SERVER_NAME "CN.DXL.ComBridgeAdapter.2020_0413"
+#define LOCAL_SOCKET_SERVER_NAME "LocalComBridgeAdapter"
 
 void ShowGraphWindow() {
 
@@ -70,6 +70,9 @@ static void set_my_user_directory(void) {
 }
 
 static bool open() {
+    if (conn.run) {
+        return true;
+    }
     // Open with LocalSocket(Not a tcp connection!)
     return OpenProxmark("socket:"LOCAL_SOCKET_SERVER_NAME, false, 1000, false, 115200);
 }
@@ -81,9 +84,10 @@ jint sendCMD(JNIEnv *env, jobject instance, jstring cmd_) {
     //may be pm3 not running.
     if (!conn.run) {
         if (open() && TestProxmark() == PM3_SUCCESS) {
-            PrintAndLogEx(NORMAL, "\nopen successful\n");
+            LOGD("Open Successfully!");
         } else {
-            PrintAndLogEx(NORMAL, "\nopen failed\n");
+            LOGD("open failed");
+            CloseProxmark();
         }
     }
     //无论如何，新的命令的输入了，就要换个行!
@@ -120,12 +124,12 @@ jboolean isExecuting(JNIEnv *env, jobject instance) {
  * 进行设备链接验证!
  * */
 jboolean testPm3(JNIEnv *env, jobject instance) {
-    LOGD("打开串口中!");
     bool ret1 = open();
-    LOGD("串口打开成功!");
-    LOGD("测试PM3中");
+    if (!ret1) {
+        CloseProxmark();
+        return false;
+    }
     bool ret2 = TestProxmark() == PM3_SUCCESS;
-    LOGD("测试PM3成功");
     return (jboolean) (ret1 && ret2);
 }
 

@@ -161,12 +161,13 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
 
     if (memcmp(pcPortName, "socket:", 7) == 0) {
         LOGD("进入本地套接字！");
-        size_t servernameLen = strlen(pcPortName) - 7;
-        char *serverNameBuf = malloc(servernameLen);
+        size_t servernameLen = (strlen(pcPortName) - 7) + 1;
+        char serverNameBuf[servernameLen];
         memset(serverNameBuf, '\0', servernameLen);
         for (int i = 7, j = 0; j < servernameLen; ++i, ++j) {
             serverNameBuf[j] = pcPortName[i];
         }
+        serverNameBuf[servernameLen - 1] = '\0';
         LOGD("命名空间: %s", serverNameBuf);
 
         int localsocket, len;
@@ -176,7 +177,6 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
         strcpy(remote.sun_path + 1, serverNameBuf);
         remote.sun_family = AF_LOCAL;
         int nameLen = strlen(serverNameBuf);
-        free(serverNameBuf);
         len = 1 + nameLen + offsetof(struct sockaddr_un, sun_path);
 
         if ((localsocket = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
