@@ -48,7 +48,6 @@
 #include <fcntl.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
-#include <jni_tools.h>
 #include "sys/socket.h"
 #include "sys/un.h"
 
@@ -159,8 +158,19 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
         return sp;
     }
 
+    // The socket for abstract namespace implement.
+    // Is local socket buffer, not a TCP or any net connection!
+    // so, you can't connect with address like: 127.0.0.1, or any IP
+    // see http://man7.org/linux/man-pages/man7/unix.7.html
     if (memcmp(pcPortName, "socket:", 7) == 0) {
-        LOGD("进入本地套接字！");
+        if (strlen(pcPortName) <= 7) {
+            free(sp);
+            return INVALID_SERIAL_PORT;
+        }
+
+        // we must use max timeout!
+        timeout.tv_usec = UART_TCP_CLIENT_RX_TIMEOUT_MS * 1000;
+
         size_t servernameLen = (strlen(pcPortName) - 7) + 1;
         char serverNameBuf[servernameLen];
         memset(serverNameBuf, '\0', servernameLen);
@@ -168,23 +178,23 @@ serial_port uart_open(const char *pcPortName, uint32_t speed) {
             serverNameBuf[j] = pcPortName[i];
         }
         serverNameBuf[servernameLen - 1] = '\0';
-        LOGD("命名空间: %s", serverNameBuf);
 
         int localsocket, len;
         struct sockaddr_un remote;
 
-        remote.sun_path[0] = '\0';  /* abstract namespace */
+        remote.sun_path[0] = '\0';  // abstract namespace
         strcpy(remote.sun_path + 1, serverNameBuf);
         remote.sun_family = AF_LOCAL;
         int nameLen = strlen(serverNameBuf);
         len = 1 + nameLen + offsetof(struct sockaddr_un, sun_path);
 
         if ((localsocket = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1) {
+            free(sp);
             return INVALID_SERIAL_PORT;
         }
 
         if (connect(localsocket, (struct sockaddr *) &remote, len) == -1) {
-            LOGD("连接失败!");
+            free(sp);
             return INVALID_SERIAL_PORT;
         }
 

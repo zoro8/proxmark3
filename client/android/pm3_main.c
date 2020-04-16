@@ -74,7 +74,8 @@ static bool open() {
         return true;
     }
     // Open with LocalSocket(Not a tcp connection!)
-    return OpenProxmark("socket:"LOCAL_SOCKET_SERVER_NAME, false, 1000, false, 115200);
+    bool ret = OpenProxmark("socket:"LOCAL_SOCKET_SERVER_NAME, false, 1000, false, 115200);
+    return ret;
 }
 
 /*
@@ -85,8 +86,10 @@ jint sendCMD(JNIEnv *env, jobject instance, jstring cmd_) {
     if (!conn.run) {
         if (open() && TestProxmark() == PM3_SUCCESS) {
             LOGD("Open Successfully!");
+            PrintAndLogEx(NORMAL, "Open Successfully!");
         } else {
-            LOGD("open failed");
+            LOGD("Open failed!");
+            PrintAndLogEx(NORMAL, "Open failed!");
             CloseProxmark();
         }
     }
