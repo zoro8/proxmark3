@@ -27,7 +27,7 @@
 #include "fileutils.h"
 #include "jni_tools.h"
 
-#define LOCAL_SOCKET_SERVER_NAME "LocalComBridgeAdapter"
+#define LOCAL_SOCKET_SERVER_NAME "DXL.COM.ASL"
 
 void ShowGraphWindow() {
 
